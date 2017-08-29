@@ -93,39 +93,40 @@ from skimage.color import colorconv
 from skimage import transform as tf
 
 # Add synthesized data
-for i in range (0,10000,1):
-	index = random.randint(0, len(X_train))
-	img = np.copy(X_train[index])
-	rot = (random.random()*.17)
-	scal = 1. + (random.random()-0.5) * 0.1
-	x = np.random.randint(-3, 3)
-	y = np.random.randint(-3, 3)
-	tform = tf.SimilarityTransform(rotation=rot, scale=scal, translation=(x, y))
-	img = tf.warp(img, tform, preserve_range=True)
-	print(np.shape(img))
-	y_train = np.concatenate((y_train, y_train[index]), axis=0)
-	X_train = np.concatenate((X_train, img), axis=0)
-	n_train += 1
+for i in range (0,50,1):
+    index = random.randint(0, len(X_train))
+    img = np.copy(X_train[index])
+    rot = (random.random()*.17)
+    scal = 1. + (random.random()-0.5) * 0.1
+    x = np.random.randint(-3, 3)
+    y = np.random.randint(-3, 3)
+    tform = tf.SimilarityTransform(rotation=rot, scale=scal, translation=(x, y))
+    img = tf.warp(img, tform, preserve_range=True)
+    y_train = np.concatenate((y_train, np.reshape(y_train[index],(1,))), axis=0)
+    img = np.reshape(img,(1,32,32,3))
+    X_train = np.concatenate((X_train, np.array(img)), axis=0)
+    n_train += 1
+print("done");
 
 # Global Normalization of Y Channel
 from sklearn.preprocessing import normalize
 
 from skimage import img_as_float
 #for img in X_train:
-#	img[:,:,0] = normalize(img[:,:,0])
+#   img[:,:,0] = normalize(img[:,:,0])
 #X_train = img_as_float(X_train)
 
 from skimage.exposure import equalize_hist
 
-#X_train = equalize_hist(X_train)
-#X_train = (X_train - .5) * 2.
+X_train = equalize_hist(X_train)
+X_train = (X_train - .5) * 2.
 
-X_train = (X_train - 128.) / 128.
+#X_train = (X_train - 128.) / 128.
 
 #print(X_train[1,1,1])
 
-import sys
-sys.exit(0)
+#import sys
+#sys.exit(0)
 
 ### Define your architecture here.
 ### Feel free to use as many code cells as needed.
