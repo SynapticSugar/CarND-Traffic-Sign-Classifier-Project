@@ -3,11 +3,15 @@ import pickle
 import csv
 # TODO: Fill this in based on where you saved the training and testing data
 
+
 text_labels = []
 with open('signnames.csv', 'r') as csvfile:
     reader = csv.reader(csvfile, delimiter=',')
+    n = 0;
     for row in reader:
-        text_labels += [row[1]]
+        if n > 0: #skip first row
+            text_labels += [row[1]]
+        n += 1
 
 training_file = 'traffic-signs-data/train.p'
 validation_file='traffic-signs-data/valid.p'
@@ -23,7 +27,10 @@ with open(testing_file, mode='rb') as f:
 X_train, y_train = train['features'], train['labels']
 X_valid, y_valid = valid['features'], valid['labels']
 X_test, y_test = test['features'], test['labels']
+print(y_test)
 
+(X_train1, y_train1) = pickle.load(open('augmented.p', "rb"))
+print("aug set: ", len(X_train1));
 ### Replace each question mark with the appropriate value. 
 ### Use python, pandas or numpy methods rather than hard coding the results
 
@@ -86,23 +93,86 @@ if 0:
 
 
 # Add synthesized data
-from skimage import transform
-print("Generating Synthetic Data", end='', flush=True)
-for i in range (0,0,1):
-    print(".", end='', flush=True)
-    index = random.randint(0, len(X_train))
-    img = np.copy(X_train[index])
-    rot = (random.random()*.26)
-    scal = 1. + (random.random()-0.5) * 0.1
-    x = np.random.randint(-3, 3)
-    y = np.random.randint(-3, 3)
-    tform = transform.SimilarityTransform(rotation=rot, scale=scal, translation=(x, y))
-    img = transform.warp(img, tform, preserve_range=True)
-    y_train = np.concatenate((y_train, np.reshape(y_train[index],(1,))), axis=0)
-    img = np.reshape(img,(1,32,32,3))
-    X_train = np.concatenate((X_train, np.array(img)), axis=0)
-    n_train += 1
-print("done. ", n_train, " samples.");
+from skimage.transform import warp, SimilarityTransform
+from skimage import img_as_ubyte
+from skimage.exposure import adjust_gamma
+import math
+import numpy as np
+from numpy import random
+import warnings
+
+def jitter(img):
+    ''' Jitter the image as described in the paper referenced here:
+        http://yann.lecun.com/exdb/publis/pdf/sermanet-ijcnn-11.pdf'''
+    
+    # knobs
+    max_rot = 15 * math.pi/180.0
+    max_scale = 0.1
+    max_delta = 2
+    max_gamma = 0.7
+
+    # randomize
+    rot = random.uniform(-1,1) * max_rot
+    scl = random.uniform(-1,1) * max_scale + 1.0
+    xd = random.randint(-max_delta, max_delta)
+    yd = random.randint(-max_delta, max_delta)
+    gamma = random.uniform(-1,1) * max_gamma + 1.0
+
+    # scale, roation, and translation
+    tform = SimilarityTransform(rotation=rot, scale=scl, translation=(xd, yd))
+    offx, offy = np.array(img.shape[:2]) / 2
+    recenter = SimilarityTransform(translation=(offx, offy))
+    recenter_inv = SimilarityTransform(translation=(-offx, -offy))
+    img = warp(img, (recenter_inv + (tform + recenter)).inverse, mode='edge')
+    
+    # gamma
+    img = adjust_gamma(img, gamma)
+    
+    # convert back to RGB [0-255] and ignore the silly precision warning
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        return img_as_ubyte(img)
+
+def jitter_data(data):
+    result = np.empty_like(data)
+    for i in range(data.shape[0]):
+        result[i] = jitter(data[i])
+    return result
+
+print("Adding synthetic data.")
+import os.path
+if (os.path.isfile('traffic-signs-data/synthetic.p') == False):
+    print("Generating Synthetic Data.", end='', flush=True)
+    for i in range(0,5,1):
+        if (i == 0):
+            X_synth = jitter_data(X_train)
+            y_synth = y_train
+        else:            
+            X_synth = np.concatenate((X_synth, jitter_data(X_train)))
+            y_synth = np.concatenate((y_synth, y_train))
+        print(".", end='', flush=True)
+    n_synth = len(X_synth)
+    print("done. ", n_train + n_synth, " samples.");
+    pickle.dump((X_synth, y_synth), open('traffic-signs-data/synthetic.p', "wb"))
+else:
+    print("Loading Synthetic data.")
+    (X_synth, y_synth) = pickle.load(open('traffic-signs-data/synthetic.p', "rb"))
+print(np.shape(X_synth[0]))
+
+# Display an example
+i = random.randint(0,len(X_train))
+plt.subplot(1,2,1)
+plt.title("Original")
+plt.imshow(X_train[i])
+plt.subplot(1,2,2)
+plt.title("Synthesized")
+plt.imshow(X_synth[i])
+plt.show()
+
+X_train = np.concatenate((X_train, X_synth))
+y_train = np.concatenate((y_train, y_synth))
+n_train = len(X_train)
+print("Total training samples = ", n_train);
 
 # Shuffle training set
 print("Shuffle training set.")
@@ -119,7 +189,7 @@ def preprocess_data(data):
     result = []
     cnt = 0
     for n in data:
-        img = cv2.cvtColor(n, cv2.COLOR_BGR2GRAY)
+        img = cv2.cvtColor(n, cv2.COLOR_RGB2GRAY)
         img = cv2.equalizeHist(img)
         result.append(img)
     result = np.reshape(np.array(result), (i,x,y,1))
@@ -138,31 +208,6 @@ if 1:
     X_valid = preprocess_data(X_valid)
     n_depth = 1
 
-# Convert to YUV and Normalize
-if 0:
-    # Global Normalization of Y Channel
-    from sklearn.preprocessing import normalize
-    from skimage import img_as_float, img_as_int, color, exposure
-    #Histogram equalization
-    #print("Histogram equalization.")
-    #X_train = exposure.equalize_hist(X_train)
-    #print(np.shape(X_train), X_train[1,1,1])
-    print("RGB to HSV.")
-    X_train = color.rgb2hsv(X_train)
-    X_train = (X_train - .5) * 2.
-    print(np.shape(X_train), X_train[1,1,1])
-    X_train = np.reshape(X_train,(n_train,32,32,1))
-    X_valid = exposure.equalize_hist(X_valid)
-    X_valid = color.rgb2hsv(X_valid)
-    X_valid = (X_valid - .5) * 2.
-    X_valid = np.reshape(X_valid,(n_valid,32,32,1))
-    X_test = exposure.equalize_hist(X_test)
-    X_test = color.rgb2hsv(X_test)
-    X_test = (X_test - .5) * 2.
-    X_test = np.reshape(X_test,(n_test,32,32,1))
-    n_depth = 1
-    #print(X_train[1,1,1])
-
 #import sys
 #sys.exit(0)
 
@@ -173,12 +218,14 @@ import tensorflow as tf
 #X_train = tf.image.convert_image_dtype(X_train, tf.float32)
 #X_train = tf.image.rgb_to_hsv(X_train)
 
-EPOCHS = 2
-BATCH_SIZE = 128
-
 from tensorflow.contrib.layers import flatten
 
-def LeNet(x, depth, keep_prob=1.0):    
+conv_1 = None
+conv_2 = None
+conv_3 = None
+
+def LeNet(x, depth, keep_prob=1.0):
+    global conv_1, conv_2, conv_3
     # Arguments used for tf.truncated_normal, randomly defines variables for the weights and biases for each layer
     mu = 0
     sigma = 0.1
@@ -245,7 +292,7 @@ def LeNet(x, depth, keep_prob=1.0):
     # TODO: Layer 6: Fully Connected. Input = 84. Output = 43.
     fc3_w = tf.Variable(tf.truncated_normal(shape=(84,n_classes), mean = mu, stddev = sigma))
     fc3_b = tf.Variable(tf.zeros(n_classes))
-    logits = tf.add(tf.matmul(fc_2, fc3_w), fc3_b)    
+    logits = tf.add(tf.matmul(fc_2, fc3_w), fc3_b)
     
     return logits
 
@@ -260,21 +307,29 @@ y = tf.placeholder(tf.int32, (None))
 keep_prob = tf.placeholder(tf.float32)
 learning_rate = tf.placeholder(tf.float32)
 one_hot_y = tf.one_hot(y, n_classes)
+k_pred = tf.placeholder(tf.int32)
 
 #Training Pipeline
+EPOCHS = 20
+BATCH_SIZE = 128
 rate = 0.001
 decay = 1.0
+drop = 0.5
 
 logits = LeNet(x, n_depth)
 cross_entropy = tf.nn.softmax_cross_entropy_with_logits(labels=one_hot_y, logits=logits)
 loss_operation = tf.reduce_mean(cross_entropy)
 optimizer = tf.train.AdamOptimizer(learning_rate = rate)
 #optimizer = tf.train.GradientDescentOptimizer(learning_rate = learning_rate)
-training_operation = optimizer.minimize(loss_operation)
 
 #Model Evaluation
-correct_prediction = tf.equal(tf.argmax(logits, 1), tf.argmax(one_hot_y, 1))
+training_operation = optimizer.minimize(loss_operation)
+predict_operation = tf.argmax(logits, 1)
+softmax_operation = tf.nn.softmax(logits)
+topk_operation = tf.nn.top_k(softmax_operation, k_pred)
+correct_prediction = tf.equal(predict_operation, tf.argmax(one_hot_y, 1))
 accuracy_operation = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
+
 saver = tf.train.Saver()
 
 def evaluate(X_data, y_data):
@@ -306,7 +361,7 @@ with tf.Session() as sess:
         for offset in range(0, num_examples, BATCH_SIZE):
             end = offset + BATCH_SIZE
             batch_x, batch_y = X_train[offset:end], y_train[offset:end]
-            sess.run(training_operation, feed_dict={x: batch_x, y: batch_y, learning_rate: rate, keep_prob: 0.7})
+            sess.run(training_operation, feed_dict={x: batch_x, y: batch_y, learning_rate: rate, keep_prob: drop})
 
         training_loss, training_accuracy = evaluate(X_train, y_train)
         train_loss.append(training_loss)
@@ -315,12 +370,12 @@ with tf.Session() as sess:
         valid_loss.append(validation_loss)
         valid_acc.append(validation_accuracy*100.0)
         print("EPOCH {} ...".format(i+1))        
-        print("Training Accuracy = {:.3f}".format(training_accuracy))
-        print("Training Loss = {:.3f}".format(training_loss))        
+        #print("Training Accuracy = {:.3f}".format(training_accuracy))
+        #print("Training Loss = {:.3f}".format(training_loss))        
         print("Validation Accuracy = {:.3f}".format(validation_accuracy))
-        print("Validation Loss = {:.3f}".format(validation_loss))
-        print("Learning Rate = {:.6f}".format(rate))
-        print()
+        #print("Validation Loss = {:.3f}".format(validation_loss))
+        #print("Learning Rate = {:.6f}".format(rate))
+        #print()
         rate = rate * decay
 
     saver.save(sess, './lenet')
@@ -334,18 +389,134 @@ with tf.Session() as sess:
     print("Test Accuracy = {:.3f}".format(test_accuracy))
 
 #Plot Training Stats
-fig, ax1 = plt.subplots()
-plt.title("Training Results [Test Accuracy = {:.3f}]".format(test_accuracy))
-ax1.plot(range(1,EPOCHS+1), train_loss, 'b', label='Training Loss')
-ax1.plot(range(1,EPOCHS+1), valid_loss, 'g', label='Validation Loss')
-ax1.set_ylabel('Loss')
-ax1.set_xlabel('Epoch')
-ax2 = ax1.twinx()
-ax2.plot(range(1,EPOCHS+1), valid_acc, 'r', label='Validation Accuracy')
-ax2.set_ylabel('Accuracy (%)')
-fig.tight_layout()
-ax2.set_ylim([0,100])
-lines, labels = ax1.get_legend_handles_labels()
-lines2, labels2 = ax2.get_legend_handles_labels()
-ax2.legend(lines + lines2, labels + labels2, bbox_to_anchor=(0., -.2, 1., -.2), mode="expand", borderaxespad=0., ncol=3, loc=3)
-plt.show()
+if 0:
+    fig, ax1 = plt.subplots()
+    plt.title("Training Results [Test Accuracy = {:.3f}]".format(test_accuracy))
+    ax1.plot(range(1,EPOCHS+1), train_loss, 'b', label='Training Loss')
+    ax1.plot(range(1,EPOCHS+1), valid_loss, 'g', label='Validation Loss')
+    ax1.set_ylabel('Loss')
+    ax1.set_xlabel('Epoch')
+    ax2 = ax1.twinx()
+    ax2.plot(range(1,EPOCHS+1), valid_acc, 'r', label='Validation Accuracy')
+    ax2.set_ylabel('Accuracy (%)')
+    fig.tight_layout()
+    ax2.set_ylim([0,100])
+    lines, labels = ax1.get_legend_handles_labels()
+    lines2, labels2 = ax2.get_legend_handles_labels()
+    ax2.legend(lines + lines2, labels + labels2, bbox_to_anchor=(0., -.2, 1., -.2), mode="expand", borderaxespad=0., ncol=3, loc=3)
+    plt.show()
+
+
+### Load the images and plot them here.
+### Feel free to use as many code cells as needed.
+
+X_wild = []
+y_wild = []
+for i in range(1,6,1):
+    img = cv2.imread('traffic-signs-data/wild_{}.png'.format(i), cv2.IMREAD_COLOR)
+    RGB_img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    X_wild.append(RGB_img)
+with open('traffic-signs-data/wild.csv', 'r') as csvfile:
+    for row in csv.reader(csvfile, delimiter=','):
+        y_wild.append(int(row[0]))
+
+n_wild = len(y_wild)
+if 0:
+    plt.figure(figsize=(5, 4))
+    for i in range(0,n_wild):
+        plt.subplot(1, n_wild, i+1)
+        plt.imshow(X_wild[i])
+        plt.title(text_labels[y_wild[i]])
+        plt.axis('off')
+    plt.suptitle('Wild Traffic Signs')
+    plt.show()
+
+
+### Run the predictions here and use the model to output the prediction for each image.
+### Make sure to pre-process the images with the same pre-processing pipeline used earlier.
+### Feel free to use as many code cells as needed.
+
+X_wild = preprocess_data(X_wild)
+
+#Evaluate Model
+def evaluate_topk(X_data, k):
+    sess = tf.get_default_session()
+    X_data = np.expand_dims(X_data, axis=0)
+    topk = sess.run(topk_operation, feed_dict={x: X_data, keep_prob: 1.0, k_pred: k})
+    return topk
+
+def evaluate_prediction(X, y):
+    sess = tf.get_default_session()
+    X = np.expand_dims(X, axis=0)
+    p = sess.run(predict_operation, feed_dict={x: X, keep_prob: 1.0})
+    c = (p == y)
+    return p,c
+
+if 1:
+    with tf.Session() as sess:
+        saver.restore(sess, tf.train.latest_checkpoint('.'))
+        for i in range(0,5,1):
+            p,c = evaluate_prediction(X_wild[i], y_wild[i])
+            print(p,c)
+
+
+### Calculate the accuracy for these 5 new images. 
+### For example, if the model predicted 1 out of 5 signs correctly, it's 20% accurate on these new images.
+with tf.Session() as sess:
+    saver.restore(sess, tf.train.latest_checkpoint('.'))
+    test_loss, test_accuracy = evaluate(X_wild, y_wild)
+    print("Wild Test Accuracy = {:.3f}".format(test_accuracy))
+
+
+### Print out the top five softmax probabilities for the predictions on the German traffic sign images found on the web. 
+### Feel free to use as many code cells as needed.
+if 0:
+    with tf.Session() as sess:
+        saver.restore(sess, tf.train.latest_checkpoint('.'))
+        for i in range(0,5,1):
+            top5 = evaluate_topk(X_wild[i], 5)
+            plt.bar(top5.indices[0], top5.values[0])
+            plt.xlabel("Class")
+            plt.ylabel('Softmax probability')
+            plt.show()
+
+
+### Visualize your network's feature maps here.
+### Feel free to use as many code cells as needed.
+
+# image_input: the test image being fed into the network to produce the feature maps
+# tf_activation: should be a tf variable name used during your training procedure that represents the calculated state of a specific weight layer
+# activation_min/max: can be used to view the activation contrast in more detail, by default matplot sets min and max to the actual min and max values of the output
+# plt_num: used to plot out multiple different weight feature map sets on the same block, just extend the plt number for each new feature map entry
+
+def outputFeatureMap(image_input, tf_activation, title, activation_min=-1, activation_max=-1 ,plt_num=1):
+    # Here make sure to preprocess your image_input in a way your network expects
+    # with size, normalization, ect if needed
+    # image_input =
+    # Note: x should be the same name as your network's tensorflow data placeholder variable
+    # If you get an error tf_activation is not defined it may be having trouble accessing the variable from inside a function
+    activation = tf_activation.eval(session=sess,feed_dict={x : image_input})
+    featuremaps = activation.shape[3]
+    cols = (featuremaps+1) / 4 + 1
+    rows = (featuremaps+1) / cols + 1
+    plt.figure(plt_num, figsize=(15,rows))
+    for featuremap in range(featuremaps):
+        plt.subplot(rows, cols, featuremap+1) # sets the number of feature maps to show on each row and column
+        #plt.title('FeatureMap ' + str(featuremap)) # displays the feature map number
+        if activation_min != -1 & activation_max != -1:
+            plt.imshow(activation[0,:,:, featuremap], interpolation="nearest", vmin =activation_min, vmax=activation_max, cmap="gray")
+        elif activation_max != -1:
+            plt.imshow(activation[0,:,:, featuremap], interpolation="nearest", vmax=activation_max, cmap="gray")
+        elif activation_min !=-1:
+            plt.imshow(activation[0,:,:, featuremap], interpolation="nearest", vmin=activation_min, cmap="gray")
+        else:
+            plt.imshow(activation[0,:,:, featuremap], interpolation="nearest", cmap="gray")
+    plt.suptitle(title)
+    plt.show()
+
+with tf.Session() as sess:
+    saver.restore(sess, tf.train.latest_checkpoint('.'))
+    img = np.expand_dims(X_wild[0], axis=0)
+    outputFeatureMap(img, conv_1, "Layer 1")
+    outputFeatureMap(img, conv_2, "Layer 2")
+    outputFeatureMap(img, conv_3, "Layer 3")
