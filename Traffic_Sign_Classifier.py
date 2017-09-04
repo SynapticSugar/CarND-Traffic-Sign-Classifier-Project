@@ -1,9 +1,8 @@
 # Load pickled data
 import pickle
 import csv
+
 # TODO: Fill this in based on where you saved the training and testing data
-
-
 text_labels = []
 with open('signnames.csv', 'r') as csvfile:
     reader = csv.reader(csvfile, delimiter=',')
@@ -27,10 +26,8 @@ with open(testing_file, mode='rb') as f:
 X_train, y_train = train['features'], train['labels']
 X_valid, y_valid = valid['features'], valid['labels']
 X_test, y_test = test['features'], test['labels']
-print(y_test)
 
-(X_train1, y_train1) = pickle.load(open('augmented.p', "rb"))
-print("aug set: ", len(X_train1));
+
 ### Replace each question mark with the appropriate value. 
 ### Use python, pandas or numpy methods rather than hard coding the results
 
@@ -389,7 +386,7 @@ with tf.Session() as sess:
     print("Test Accuracy = {:.3f}".format(test_accuracy))
 
 #Plot Training Stats
-if 0:
+if 1:
     fig, ax1 = plt.subplots()
     plt.title("Training Results [Test Accuracy = {:.3f}]".format(test_accuracy))
     ax1.plot(range(1,EPOCHS+1), train_loss, 'b', label='Training Loss')
