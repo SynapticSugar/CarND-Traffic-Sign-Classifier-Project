@@ -61,7 +61,7 @@ There were two fundamental processing operations that were necessary for trainin
 
 For the training set augmentation process I added back images from the training set that had undergone a jitter step as described in the [reference paper]([http://yann.lecun.com/exdb/publis/pdf/sermanet-ijcnn-11.pdf) provided. The jitter step consisted of a random x,y translation of up to [2,2] pixels, a rotation between [-15,15] degrees, and a scale change between [.9,1.1].  In addition to jitter, it was founf that varying the brightness of the training image was important for achieving a high validation accuracy. This step consisted a introduced random gamma value between [.3,1.7].  Finally, following the same treatment in the paper, the data set as increased by 500% of the size of the original training set using this augmentation method for a total of 208794 images.
 
-The addition of augmented data had a profound affect on the final accuracy achieved. TODO show a results table.
+The addition of augmented data had a profound affect on the final test accuracy achieved.
 
 Here is a random example of a traffic sign image before and after augmentation:
 
