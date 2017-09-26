@@ -100,8 +100,13 @@ My final model consisted of the following layers:
 
  
 
-
 #### 3. Describe how you trained your model. The discussion can include the type of optimizer, the batch size, number of epochs and any hyperparameters such as learning rate.
+
+Hyperparameters:
+* Adam Optimizer
+* Batch size 128
+* Epochs 20
+* Learning rate 0.0007
 
 To train the model I used the Adam optimizer.  This optimizer does not include a decaying learning rate as it tunes this dynamically with momentum.  The Adam optimizer converges extremely quickly and generally outperformed the gradient decent optimizer.  The only drawback was more variation in the validation accuracy for a training session.
 
@@ -118,7 +123,7 @@ My final model results were:
 * validation set accuracy of 98.9%
 * test set accuracy of **96.6%**
 
-I choose an iterative method to solve the classification problem.  I started with the LeNet5 model as taught in the course.  I found that the test accuracy of the model was just under 93% without any modifications. It was also a convolution network, which is well suited for classification problems and is relatively simple compared with more complex networks like GoogleLeNet and AlexNet.
+I choose an iterative method to solve the classification problem.  I started with the LeNet5 model as taught in the course.I found that the test accuracy of the model was just under 93% without any modifications. It was also a convolution network, which is well suited for classification problems and is relatively simple compared with more complex networks like GoogleLeNet and AlexNet.
 
 I altered the classic LeNet5 by adding dropout layers and an extra convolution/Relu layer. A dropout of 0.5 was needed after every hidden fully connected layer in order to reduce overtraining.This was evident by the rise of the validation accuracy and the very high training accuracy.  The extra convolution layer increased the final test accuracy of the DNN by about 2% by increasing the feature map depth significantly.
 
@@ -188,19 +193,19 @@ I decided to run the wild image that was falsly classified through the visualize
 <img src="./traffic-signs-data/wild_2.png" alt="softmax wild 2" style="width: 200px;"/>
 </p>
 
-Layer one is the output of the first convolution layer and shows the effect of the weights and biases for each of the 32 filters. There are several 45 degree (9, 16, 20, and 23), horizontal (8, 17, and 17), and vertical (2, 7, 24, and 26) filters. There are also features that look like a threshold was applied. See 3 and 23. There are also some filters which seem to be composits of the above filters.
+Layer one is the output of the first convolution layer and shows the effect of the weights and biases for each of the 32 filters. There are several 45 degree (9, 16, 20, and 23), horizontal (8, 17, and 17), and vertical (2, 7, 24, and 26) filters. There are also features that look like a threshold was applied. See 3 and 23. There are also some filters which seem to be composits of the above filters. In general this layer is looking at edges.
 
 <p align="center">
 <img src="./vis_layer_1.png" alt="Layer 1" style="width: 800px;"/>
 </p>
 
-Layer two has more depth but less width and height.  This layer is harder for humans to understand what is happening inside these filters.
+Layer two has more depth but less width and height.  This layer is harder for humans to understand what is happening inside these filters. This layer would be looking for small features that make up a sign.
 
 <p align="center">
 <img src="./vis_layer_2.png" alt="Layer 2" style="width: 800px;"/>
 </p>
 
-Layer three has very little spatial information for each filter, but there is more of them to generalize the classification problem.
+Layer three has very little spatial information for each filter, but there is more of them to generalize the classification problem. This layer would be identifying a particlular type of traffic sign.
 
 <p align="center">
 <img src="./vis_layer_3.png" alt="Layer 3" style="width: 800px;"/>
